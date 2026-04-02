@@ -1,0 +1,48 @@
+# docker-compose.yml
+# appコンテナ（CLIツール実行）と postgresコンテナ（テスト用DB）を定義する
+# 開発時は postgres コンテナにサンプルデータが自動投入される
+
+services:
+  # ─────────────────────────────────────────
+  # PostgreSQL テスト用コンテナ
+  # サンプルスキーマ・データを init.sql で自動投入
+  # ─────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: db-to-csv-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sampledb
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────
+  # app コンテナ：CLIツール本体
+  # postgres が healthy になってから起動する
+  # ─────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: db-to-csv-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: sampledb
+      LIMIT: 1000
+    volumes:
+      # 生成された report.html をホスト側の output/ に出力する
+      - ./output:/app/output

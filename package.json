@@ -1,0 +1,21 @@
+{
+  "name": "database-to-csv",
+  "version": "1.0.0",
+  "description": "PostgreSQL テーブルをER図＋スプレッドシート形式でHTMLレポートとして出力するCLIツール",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "@types/pg": "^8.11.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}
