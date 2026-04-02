@@ -1,0 +1,224 @@
+<!--
+  titleタグ: AIにコードは書かせられる。でもデータベースが見えないと詰む話【db-canvas-viewer】
+  メタディスクリプション: AI駆動開発で本当のボトルネックはコードじゃなくDBの可視化です。TypeScript製ツール「db-canvas-viewer」を使えばSQL不要でER図・テーブルデータ・FK関係を一画面で把握できます。
+  スラッグ: ai-dev-database-visualization-db-canvas-viewer
+-->
+<article>
+
+  <h2>はじめに</h2>
+  <p>AIがコードを書いてくれる時代になりました。</p>
+  <p>ChatGPTやClaude Codeに「このAPIを実装して」と伝えれば、数十秒で動くコードが出てきます。コード生成は、もはや「解決済みの課題」と言っていいかもしれません。</p>
+  <p>でも、こんな経験はありませんか？</p>
+  <ul>
+    <li>「AIに指示したいけど、テーブルの構造を説明できない」</li>
+    <li>「どのテーブルがどこと繋がってるか、毎回SQLで確認してる」</li>
+    <li>「初めて触るDBは何があるかわからなくて、AIへの指示が雑になる」</li>
+  </ul>
+  <p><strong>AI駆動開発で本当のボトルネックは、コードではなくデータベースの可視化です。</strong></p>
+  <p>この記事では、その問題を解決するオープンソースツール「db-canvas-viewer」の仕組みと使い方を紹介します。</p>
+  <p><strong>この記事でわかること：</strong></p>
+  <ul>
+    <li>なぜAI駆動開発でDBの可視化がボトルネックになるのか</li>
+    <li>db-canvas-viewerで何が解決できるのか</li>
+    <li>SQL不要でER図・テーブルデータ・FK関係を確認する方法</li>
+    <li>Dockerで3コマンド起動する手順</li>
+  </ul>
+
+  <hr />
+
+  <h2>AI駆動開発の「本当の壁」とは何か</h2>
+
+  <h3>コード生成はもう問題じゃない</h3>
+  <p>2024〜2025年で、AIによるコード生成の精度は劇的に向上しました。</p>
+  <p>「TypeScriptでRESTful APIを作って」「このバグを修正して」「テストコードを書いて」——これらはAIが十分に対応できます。</p>
+  <p>プログラミング学習者がAIと一緒に実務レベルのアプリを作れるようになったのは、この進化のおかげです。</p>
+
+  <h3>AIへの指示精度を決めるのは「DBの理解度」</h3>
+  <p>ところが、AI駆動開発には見落とされがちな壁があります。</p>
+  <p><strong>AIへの指示の質は、開発者がデータベース構造をどれだけ把握しているかに直結します。</strong></p>
+  <p>例えば、こんな指示の違いを比べてみてください：</p>
+  <pre><code>❌ 悪い指示:
+「注文履歴を取得するAPIを作って」
+
+✅ 良い指示:
+「ordersテーブルとorder_itemsテーブルをJOINして、
+ customer_idで絞り込む注文履歴取得APIを作って。
+ 外部キーはorders.id → order_items.order_idで繋がってる」</code></pre>
+  <p>同じことを依頼していても、後者の指示はAIが一発で正しいコードを出してきます。前者は「どんなテーブル構造ですか？」という確認から始まります。</p>
+  <p><strong>AIを使いこなせる開発者とそうでない開発者の差は、DBを素早く把握できるかどうかです。</strong></p>
+
+  <h3>「テーブル構造がわからない」が開発を止める</h3>
+  <p>では、DBの構造を確認するにはどうすればいいか。従来の方法はこうです：</p>
+  <pre><code>-- テーブル一覧を確認
+\dt
+
+-- カラム構造を確認
+\d+ orders
+
+-- 外部キーを確認
+SELECT kcu.table_name, kcu.column_name, ccu.table_name AS foreign_table_name
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu ...</code></pre>
+  <p>毎回SQLを叩いて、テキスト形式の結果を読んで、頭の中でER図を組み立てる。</p>
+  <p>慣れた人にとっては問題ありませんが、<strong>プログラミング学習者や初めて触るDBではこれがひとつのハードルになります。</strong></p>
+  <p>しかも、AI駆動開発では「DB構造をAIに説明する」という作業が発生します。SQLの出力結果をコピーしてAIに貼り付けて、「この構造で…」という説明を毎回する必要があります。</p>
+
+  <hr />
+
+  <h2>db-canvas-viewerで解決できること</h2>
+  <p><strong>db-canvas-viewer</strong>は、PostgreSQLに接続するだけで、テーブル構造・FK関係・実データを3種類のHTMLレポートとして自動生成するCLIツールです。</p>
+  <p>GitHubリポジトリ：<a href="https://github.com/ryusei2790/database-to-csv" target="_blank" rel="noopener">https://github.com/ryusei2790/database-to-csv</a></p>
+  <p>SQLを1行も書かずに、以下がブラウザで確認できます。</p>
+
+  <h3>🗂 キャンバスビュー：全テーブルを一画面で</h3>
+  <p>全テーブルのデータをキャンバス上に同時表示し、FK（外部キー）関係をベジェ曲線の矢印で接続します。</p>
+  <ul>
+    <li>ドラッグでパン（画面移動）</li>
+    <li>ホイールでズームイン/アウト</li>
+    <li>FK依存関係を矢印で視覚的に把握</li>
+  </ul>
+  <p>AIに「このDB構造で…」と説明するときも、このビューをスクリーンショットするだけで済みます。</p>
+
+  <h3>📋 テーブルビューアー：ER図クリックでデータ確認</h3>
+  <p>左パネルにER図、右パネルにテーブルデータが表示されます。</p>
+  <ul>
+    <li>ER図のノードをクリックするとデータが右パネルに表示</li>
+    <li>カラムフィルター・ページネーション付き</li>
+    <li>CSVダウンロードボタン1クリックで出力</li>
+  </ul>
+  <p>「どんなデータが入ってるか」をSQLなしで確認できるため、AIへの指示に使うサンプルデータを素早く取得できます。</p>
+
+  <h3>🗺 スキーマ概観：PK・FK・カラムを色分けで全画面表示</h3>
+  <p>全カラムを🔑PK / 🔗FK / 通常で色分けしたER図を全画面表示します。</p>
+  <ul>
+    <li>階層型レイアウトで依存関係が一目瞭然</li>
+    <li>フォース型レイアウトに切り替えも可能</li>
+    <li>テーブル一覧サイドバーで特定テーブルへのフォーカスができる</li>
+  </ul>
+
+  <hr />
+
+  <h2>db-canvas-viewerの技術的な仕組み</h2>
+
+  <h3>information_schemaでスキーマを自動取得</h3>
+  <p>このツールの汎用性の核心は、PostgreSQL標準の<code>information_schema</code>の活用です。</p>
+  <pre><code>// テーブル・カラム・PK情報を一括取得
+const result = await pool.query(`
+  SELECT
+    t.table_name,
+    c.column_name,
+    c.data_type,
+    CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END AS is_primary
+  FROM information_schema.tables t
+  JOIN information_schema.columns c
+    ON t.table_name = c.table_name
+  WHERE t.table_schema = 'public'
+    AND t.table_type = 'BASE TABLE'
+  ORDER BY t.table_name, c.ordinal_position
+`);</code></pre>
+  <p><code>information_schema</code>はPostgreSQLに標準搭載されているメタデータテーブル群です。これにより、<strong>接続先のDBに合わせた設定不要で構造を自動取得</strong>できます。</p>
+
+  <h3>SVGベジェ曲線でFK矢印を描画</h3>
+  <p>キャンバスビューのFK矢印はSVGで描かれており、FK元カラムからFK先カラムへS字カーブで接続します。</p>
+  <pre><code>const cpOffset = Math.max(50, Math.abs(fromY - toY) * 0.4);
+const path = `M ${fromX} ${fromY} `
+           + `C ${fromX} ${fromY - cpOffset} `
+           + `  ${toX} ${toY + cpOffset} `
+           + `  ${toX} ${toY}`;</code></pre>
+
+  <h3>トポロジカルソートで親テーブルを上位に配置</h3>
+  <p>FK参照関係を有向グラフとみなし、参照される側（親テーブル）が上層、参照する側（子テーブル）が下層になるよう自動配置します。</p>
+  <pre><code>function getLevel(name) {
+  if (name in levels) return levels[name];
+  if (visiting[name]) { levels[name] = 0; return 0; } // 循環FK対策
+  visiting[name] = true;
+  const maxDep = (deps[name] || []).reduce(
+    (m, dep) => Math.max(m, getLevel(dep)), -1
+  );
+  levels[name] = maxDep + 1;
+  delete visiting[name];
+  return levels[name];
+}</code></pre>
+
+  <hr />
+
+  <h2>セットアップ方法：3コマンドで起動</h2>
+
+  <h3>前提条件</h3>
+  <ul>
+    <li>Docker / Docker Composeがインストール済みであること</li>
+  </ul>
+
+  <h3>起動手順</h3>
+  <pre><code># リポジトリをクローン
+git clone https://github.com/ryusei2790/database-to-csv.git
+cd database-to-csv
+
+# 起動（PostgreSQL初期化 + HTMLレポート生成）
+docker compose up</code></pre>
+  <p>これだけです。<code>output/</code>ディレクトリにHTMLが生成されます：</p>
+  <pre><code>output/
+├── report.html   # キャンバスビュー
+├── viewer.html   # テーブルビューアー + CSVエクスポート
+└── schema.html   # スキーマ概観ER図</code></pre>
+
+  <h3>自分のDBに接続する場合</h3>
+  <p><code>docker-compose.yml</code>の環境変数を書き換えるだけです：</p>
+  <pre><code>environment:
+  DB_HOST: your-db-host
+  DB_PORT: 5432
+  DB_USER: your-user
+  DB_PASSWORD: your-password
+  DB_NAME: your-db-name
+  LIMIT: 1000</code></pre>
+
+  <hr />
+
+  <h2>よくある質問</h2>
+
+  <h3>Q. PostgreSQL以外のDB（MySQL・SQLiteなど）にも対応していますか？</h3>
+  <p>現在はPostgreSQL専用です。<code>information_schema</code>はMySQLにも存在するため、対応拡張の余地はあります。</p>
+
+  <h3>Q. データは外部に送信されますか？</h3>
+  <p>送信されません。完全ローカルで動作します。生成されたHTMLも単体で動くスタンドアロンファイルです（CDN依存あり）。</p>
+
+  <h3>Q. 大きなDBでも使えますか？</h3>
+  <p><code>LIMIT</code>環境変数でテーブルごとの最大取得行数を制御できます（デフォルト1000行）。スキーマ取得はデータ量に関係なく動作します。</p>
+
+  <h3>Q. AI（ChatGPT・Claudeなど）と組み合わせるにはどうすればいいですか？</h3>
+  <p>スキーマ概観のスクリーンショットをAIに貼り付けるだけで、DB構造を視覚的に伝えられます。また、テーブルビューアーのCSVエクスポートでサンプルデータをAIに渡すこともできます。</p>
+
+  <h3>Q. TypeScriptやDockerの知識は必要ですか？</h3>
+  <p>使用するだけであれば不要です。<code>docker compose up</code>の1コマンドで動きます。</p>
+
+  <hr />
+
+  <h2>まとめ</h2>
+  <ul>
+    <li>AI駆動開発の本当のボトルネックは「コード生成」ではなく「DB構造の把握」</li>
+    <li>AIへの指示精度はDBをどれだけ素早く理解できるかに直結する</li>
+    <li>db-canvas-viewerはSQL不要でPostgreSQLの構造・データ・FK関係を可視化する</li>
+    <li><code>information_schema</code>により接続先DB問わず自動スキーマ取得が可能</li>
+    <li><code>docker compose up</code>の1コマンドで起動でき、3種類のHTMLレポートを生成する</li>
+  </ul>
+  <p><strong>DB構造が見えると、AIへの指示が変わります。指示が変わると、開発速度が変わります。</strong></p>
+  <p>ぜひ試してみてください。</p>
+
+  <hr />
+
+  <h2>この記事を書いた人</h2>
+  <p><strong>ryusei Ueda</strong><br />
+  動画編集 × プログラミング学習中。DaVinci Resolveを使った動画編集と、Web開発・AI活用開発を並行して進めています。学んだことをZenn・note・WordPressで発信中。</p>
+  <ul>
+    <li>📺 YouTube: <a href="http://www.youtube.com/@ryuseiUeda-0106" target="_blank" rel="noopener">ryuseiUeda チャンネル</a></li>
+    <li>📸 Instagram: <a href="https://www.instagram.com/obako_illustrate/?hl=ja" target="_blank" rel="noopener">@obako_illustrate</a></li>
+    <li>🐦 X (Twitter): <a href="https://x.com/zzkptrjmj36b7ic" target="_blank" rel="noopener">@zzkptrjmj36b7ic</a></li>
+  </ul>
+
+  <hr />
+
+  <h2>📲 LINE 公式アカウント</h2>
+  <p>限定情報やお役立ちコンテンツをLINEで配信しています。ぜひ登録してください！</p>
+  <p>👉 <a href="https://line.me/R/ti/p/@202qpxlu" target="_blank" rel="noopener">LINE公式アカウントに登録する</a></p>
+
+</article>
