@@ -6,12 +6,19 @@
 
 import { pool } from "../db/client";
 import type { Table } from "../db/schema";
+import { quoteIdentifier } from "../db/identifiers";
 
 /** Tabulator に渡す1テーブル分のデータ */
 export interface TableData {
-  /** テーブル名 */
+  /** 一意なテーブルID */
+  id:      string;
+  /** スキーマ名 */
+  schema:  string;
+  /** 生のテーブル名 */
   name:    string;
-  /** カラム名の配列（Tabulator の columns 定義に使用） */
+  /** 画面表示用のテーブル名 */
+  displayName: string;
+  /** テーブル名 */
   columns: string[];
   /** 行データの配列 */
   rows:    Record<string, unknown>[];
@@ -28,21 +35,16 @@ export async function fetchAllTableData(tables: Table[]): Promise<TableData[]> {
 
   const results = await Promise.all(
     tables.map(async (t) => {
-      // SQL インジェクション対策：テーブル名を識別子として引用符で囲む
-      // pg の $1 プレースホルダはテーブル名には使えないため
-      // テーブル名を英数字・アンダースコアに限定して検証する
-      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(t.name)) {
-        console.warn(`⚠️  テーブル名が不正なためスキップ: ${t.name}`);
-        return { name: t.name, columns: [], rows: [] };
-      }
-
       const { rows } = await pool.query(
-        `SELECT * FROM "${t.name}" LIMIT $1`,
+        `SELECT * FROM ${quoteIdentifier(t.schema)}.${quoteIdentifier(t.name)} LIMIT $1`,
         [limit]
       );
 
       return {
-        name:    t.name,
+        id: t.id,
+        schema: t.schema,
+        name: t.name,
+        displayName: t.displayName,
         columns: t.columns.map((c) => c.name),
         rows,
       };

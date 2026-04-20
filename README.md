@@ -29,8 +29,8 @@ SQL を書かなくてもデータベース全体の構造とデータを直感�
 - **🗂 キャンバスビュー** — 全テーブルのデータをキャンバス上に同時表示。FK（外部キー）のあるカラム同士をベジェ曲線の矢印で接続。ドラッグ＆ホイールでパン/ズーム操作に対応
 - **📋 テーブルビューアー** — ER図をクリックしてテーブルを切り替え。Tabulatorによるカラムフィルター・ページネーション・CSVダウンロードに対応
 - **🗺 スキーマ概観** — 全カラムを🔑PK / 🔗FK / 通常で色分けしたER図を全画面表示。階層型・フォース型レイアウトの切り替えが可能
-- **自動スキーマ取得** — `information_schema` を参照してテーブル・カラム・外部キーを自動検出
-- **オフライン動作** — 生成されたHTMLはブラウザで開くだけで動作（CDN依存あり）
+- **自動スキーマ取得** — `information_schema` / `pg_constraint` を参照してテーブル・カラム・外部キーを自動検出
+- **オフライン動作** — 生成されたHTMLと同梱アセットだけでブラウザ表示可能
 
 ---
 
@@ -103,6 +103,10 @@ docker compose up
 
 ```
 output/
+├── assets/
+│   ├── vis-network.min.js
+│   ├── tabulator.min.js
+│   └── tabulator.min.css
 ├── report.html   # 🗂 キャンバスビュー（全テーブル同時表示 + FK矢印）
 ├── viewer.html   # 📋 テーブルビューアー（ER図 + CSVエクスポート）
 └── schema.html   # 🗺 スキーマ概観（ER図）
@@ -126,8 +130,11 @@ services:
       DB_USER: your-user         # DBユーザー名
       DB_PASSWORD: your-password # DBパスワード
       DB_NAME: your-db-name      # 接続するDB名
+      DB_SCHEMA: public,app      # 任意。対象スキーマをカンマ区切りで指定
       LIMIT: 1000                # テーブルごとの最大取得行数
 ```
+
+`DB_SCHEMA` を省略した場合は、`pg_%` と `information_schema` を除く全ユーザースキーマを対象にします。
 
 変更後、再度 `docker compose up` で実行するとレポートが生成されます。
 

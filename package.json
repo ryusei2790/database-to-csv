@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "dotenv": "^16.4.5",
-    "pg": "^8.11.5"
+    "pg": "^8.11.5",
+    "tabulator-tables": "^6.2.1",
+    "vis-network": "^9.1.9"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",

@@ -7,6 +7,15 @@
 
 import type { TableData } from "./tableData";
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export interface TableViewerHtmlInput {
   nodesJson:   string;
   edgesJson:   string;
@@ -24,20 +33,18 @@ export function generateTableViewerHtml(input: TableViewerHtmlInput): string {
   // XSS 対策として </script> タグをエスケープする
   const tableDataJson = JSON.stringify(tableData)
     .replace(/<\/script>/gi, "<\\/script>");
+  const safeDbName = escapeHtml(dbName);
+  const safeGeneratedAt = escapeHtml(generatedAt);
 
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Table Viewer — ${dbName}</title>
-
-  <!-- vis-network: ER図描画 -->
-  <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
-
-  <!-- Tabulator: スプレッドシート表示 + CSV エクスポート -->
-  <link  href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator.min.css" rel="stylesheet" />
-  <script src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
+  <title>Table Viewer — ${safeDbName}</title>
+  <script src="./assets/vis-network.min.js"></script>
+  <link href="./assets/tabulator.min.css" rel="stylesheet" />
+  <script src="./assets/tabulator.min.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -195,8 +202,8 @@ export function generateTableViewerHtml(input: TableViewerHtmlInput): string {
 <body>
 
 <header>
-  <h1>📋 Table Viewer — ${dbName}</h1>
-  <span class="meta">Generated: ${generatedAt}</span>
+  <h1>📋 Table Viewer — ${safeDbName}</h1>
+  <span class="meta">Generated: ${safeGeneratedAt}</span>
   <nav class="header-nav">
     <a href="report.html" class="btn-nav">🗂 キャンバスビュー</a>
     <a href="schema.html" class="btn-nav">🗺 スキーマ概観</a>
@@ -234,7 +241,7 @@ export function generateTableViewerHtml(input: TableViewerHtmlInput): string {
 
   // テーブル名 → データのマップを作成して O(1) で検索できるようにする
   const tableMap = {};
-  TABLE_DATA.forEach(function(t) { tableMap[t.name] = t; });
+  TABLE_DATA.forEach(function(t) { tableMap[t.id] = t; });
 
   // ─────────────────────────────────────────────────
   // vis-network ER図の初期化
@@ -302,16 +309,16 @@ export function generateTableViewerHtml(input: TableViewerHtmlInput): string {
 
   network.on("click", function(params) {
     if (params.nodes.length === 0) return;
-    const tableName = params.nodes[0];
-    showTable(tableName);
+    const tableId = params.nodes[0];
+    showTable(tableId);
   });
 
-  function showTable(tableName) {
-    const data = tableMap[tableName];
+  function showTable(tableId) {
+    const data = tableMap[tableId];
     if (!data) return;
 
-    currentTable = tableName;
-    document.getElementById("table-name").textContent = tableName;
+    currentTable = tableId;
+    document.getElementById("table-name").textContent = data.displayName;
     document.getElementById("btn-csv").disabled = false;
 
     // Tabulator のカラム定義を生成する
@@ -354,12 +361,13 @@ export function generateTableViewerHtml(input: TableViewerHtmlInput): string {
   // ─────────────────────────────────────────────────
   function downloadCsv() {
     if (!tabulatorInstance || !currentTable) return;
-    tabulatorInstance.download("csv", currentTable + ".csv");
+    const data = tableMap[currentTable];
+    tabulatorInstance.download("csv", data.displayName + ".csv");
   }
 
   // 最初のテーブルを自動選択して即座にデータを表示する
   if (TABLE_DATA.length > 0) {
-    const firstName = TABLE_DATA[0].name;
+    const firstName = TABLE_DATA[0].id;
     showTable(firstName);
     // vis-network のノードも選択状態にする
     network.selectNodes([firstName]);
