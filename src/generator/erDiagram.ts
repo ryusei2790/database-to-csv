@@ -42,9 +42,9 @@ export function buildVisNetworkData(
       .join("\n");
 
     return {
-      id:    t.name,
-      label: `${t.name}\n──────────\n${columnLines}`,
-      title: t.name,
+      id:    t.id,
+      label: `${t.displayName}\n──────────\n${columnLines}`,
+      title: t.displayName,
     };
   });
 

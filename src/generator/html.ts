@@ -9,6 +9,15 @@
 import type { TableData } from "./tableData";
 import type { ForeignKey } from "../db/schema";
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export interface HtmlGeneratorInput {
   tableData:   TableData[];
   foreignKeys: ForeignKey[];
@@ -28,13 +37,15 @@ export function generateHtml(input: HtmlGeneratorInput): string {
     .replace(/<\/script>/gi, "<\\/script>");
   const foreignKeysJson = JSON.stringify(foreignKeys)
     .replace(/<\/script>/gi, "<\\/script>");
+  const safeDbName = escapeHtml(dbName);
+  const safeGeneratedAt = escapeHtml(generatedAt);
 
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DB Viewer — ${dbName}</title>
+  <title>DB Viewer — ${safeDbName}</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -211,8 +222,8 @@ export function generateHtml(input: HtmlGeneratorInput): string {
 <body>
 
 <header>
-  <h1>🗄 DB Viewer — ${dbName}</h1>
-  <span class="meta">Generated: ${generatedAt}</span>
+  <h1>🗄 DB Viewer — ${safeDbName}</h1>
+  <span class="meta">Generated: ${safeGeneratedAt}</span>
   <span class="hint">🖱 ドラッグでパン &nbsp;/&nbsp; ホイールでズーム</span>
   <nav class="header-nav">
     <a href="viewer.html" class="btn-nav">📋 テーブルビューアー</a>
@@ -252,7 +263,7 @@ export function generateHtml(input: HtmlGeneratorInput): string {
 
   // ─── テーブル名→データのマップ ──────────────────────
   var tableMap = {};
-  TABLE_DATA.forEach(function(t) { tableMap[t.name] = t; });
+  TABLE_DATA.forEach(function(t) { tableMap[t.id] = t; });
 
   // ─── トポロジカル深さ計算 ────────────────────────────
   // FKを持つテーブル（子）は参照先テーブル（親）より深いレベルに配置される。
@@ -260,7 +271,7 @@ export function generateHtml(input: HtmlGeneratorInput): string {
   // レベルN = レベルN-1のテーブルを参照するテーブル
   function computeLevels() {
     var deps = {};
-    TABLE_DATA.forEach(function(t) { deps[t.name] = []; });
+    TABLE_DATA.forEach(function(t) { deps[t.id] = []; });
     FOREIGN_KEYS.forEach(function(fk) {
       if (deps[fk.fromTable]) deps[fk.fromTable].push(fk.toTable);
     });
@@ -282,7 +293,7 @@ export function generateHtml(input: HtmlGeneratorInput): string {
       return levels[name];
     }
 
-    TABLE_DATA.forEach(function(t) { getLevel(t.name); });
+    TABLE_DATA.forEach(function(t) { getLevel(t.id); });
     return levels;
   }
 
@@ -297,7 +308,7 @@ export function generateHtml(input: HtmlGeneratorInput): string {
 
     var groups = {};
     TABLE_DATA.forEach(function(t) {
-      var l = levels[t.name] || 0;
+      var l = levels[t.id] || 0;
       if (!groups[l]) groups[l] = [];
       groups[l].push(t);
     });
@@ -325,7 +336,7 @@ export function generateHtml(input: HtmlGeneratorInput): string {
         var rowCount = Math.min(t.rows.length, MAX_ROWS);
         var cardH = CARD_HEADER_H + COL_HEADER_H + rowCount * DATA_ROW_H;
         if (t.rows.length > MAX_ROWS) cardH += 24; // 省略行フッター
-        positions[t.name] = {
+        positions[t.id] = {
           x: xStart + i * (CARD_W + H_GAP),
           y: yOffset,
           h: cardH
@@ -356,11 +367,11 @@ export function generateHtml(input: HtmlGeneratorInput): string {
   });
 
   TABLE_DATA.forEach(function(t) {
-    var pos = positions[t.name];
+    var pos = positions[t.id];
 
     var card = document.createElement('div');
     card.className = 'table-card';
-    card.id = 'card-' + t.name;
+    card.id = 'card-' + t.id.replace(/[^A-Za-z0-9_-]/g, '_');
     card.style.left  = pos.x + 'px';
     card.style.top   = pos.y + 'px';
     card.style.width = CARD_W + 'px';
@@ -368,8 +379,8 @@ export function generateHtml(input: HtmlGeneratorInput): string {
     // テーブル名ヘッダー
     var hdr = document.createElement('div');
     hdr.className = 'card-header';
-    hdr.textContent = t.name;
-    hdr.title = t.name;
+    hdr.textContent = t.displayName;
+    hdr.title = t.displayName;
     card.appendChild(hdr);
 
     // データテーブル（カラムヘッダー + データ行）
@@ -383,10 +394,10 @@ export function generateHtml(input: HtmlGeneratorInput): string {
       var th = document.createElement('th');
       th.className = 'col-header';
       th.setAttribute('data-col', col);
-      th.setAttribute('data-table', t.name);
+      th.setAttribute('data-table', t.id);
       th.textContent = col;
       th.title = col;
-      var role = colRoles[t.name + '.' + col];
+      var role = colRoles[t.id + '.' + col];
       if (role === 'fk') th.classList.add('fk-col');
       if (role === 'pk') th.classList.add('pk-col');
       headerTr.appendChild(th);
@@ -480,8 +491,8 @@ export function generateHtml(input: HtmlGeneratorInput): string {
     // SVGタイトル要素でホバー時にFK情報をツールチップ表示する
     var titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
     titleEl.textContent =
-      fk.fromTable + '.' + fk.fromColumn + ' → ' +
-      fk.toTable   + '.' + fk.toColumn;
+      fk.fromDisplayName + '.' + fk.fromColumn + ' → ' +
+      fk.toDisplayName   + '.' + fk.toColumn;
     pathEl.appendChild(titleEl);
 
     svg.appendChild(pathEl);
