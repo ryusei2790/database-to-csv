@@ -14,6 +14,7 @@ import { buildVisNetworkData } from "./generator/erDiagram";
 import { generateHtml }            from "./generator/html";
 import { generateTableViewerHtml } from "./generator/tableViewerHtml";
 import { generateSchemaHtml }      from "./generator/schemaHtml";
+import { copyRuntimeAssets }       from "./generator/assets";
 
 /** 出力先ディレクトリ（docker-compose のボリュームマウントと合わせる） */
 const OUTPUT_DIR    = path.join(__dirname, "..", "output");
@@ -70,6 +71,7 @@ async function main(): Promise<void> {
 
     // ─── 4. ファイル出力 ─────────────────────────────
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+    copyRuntimeAssets(OUTPUT_DIR);
     fs.writeFileSync(REPORT_PATH, reportHtml, "utf-8");
     fs.writeFileSync(VIEWER_PATH, viewerHtml, "utf-8");
     fs.writeFileSync(SCHEMA_PATH, schemaHtml, "utf-8");

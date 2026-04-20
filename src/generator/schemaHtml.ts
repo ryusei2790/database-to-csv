@@ -11,6 +11,15 @@
 
 import type { Table, ForeignKey } from "../db/schema";
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 interface SchemaHtmlInput {
   tables:      Table[];
   foreignKeys: ForeignKey[];
@@ -48,7 +57,7 @@ function buildNetworkData(
   // ─── ノード生成 ───────────────────────────────────
   const nodes = tables.map((t) => {
     const columnLines = t.columns.map((c) => {
-      const key = `${t.name}.${c.name}`;
+      const key = `${t.id}.${c.name}`;
       if (c.isPrimary) {
         return `🔑 ${c.name} : ${c.type}`;
       } else if (fkColumnSet.has(key)) {
@@ -59,15 +68,15 @@ function buildNetworkData(
     });
 
     const label = [
-      ` ${t.name} `,
+      ` ${t.displayName} `,
       `──────────────────────`,
       ...columnLines,
     ].join("\n");
 
     return {
-      id:    t.name,
+      id:    t.id,
       label,
-      title: `テーブル: ${t.name}（${t.columns.length} カラム）`,
+      title: `テーブル: ${t.displayName}（${t.columns.length} カラム）`,
       color: {
         background: "#1a2744",
         border:     "#3182ce",
@@ -83,7 +92,7 @@ function buildNetworkData(
     to:     fk.toTable,
     // エッジラベルに「どのカラム同士か」を表示
     label:  `${fk.fromColumn}\n→ ${fk.toColumn}`,
-    title:  `${fk.fromTable}.${fk.fromColumn} → ${fk.toTable}.${fk.toColumn}`,
+    title:  `${fk.fromDisplayName}.${fk.fromColumn} → ${fk.toDisplayName}.${fk.toColumn}`,
     arrows: {
       to: {
         enabled: true,
@@ -108,6 +117,8 @@ function buildNetworkData(
 export function generateSchemaHtml(input: SchemaHtmlInput): string {
   const { tables, foreignKeys, dbName, generatedAt } = input;
   const { nodesJson, edgesJson } = buildNetworkData(tables, foreignKeys);
+  const safeDbName = escapeHtml(dbName);
+  const safeGeneratedAt = escapeHtml(generatedAt);
 
   // 統計情報
   const tableCount = tables.length;
@@ -119,10 +130,8 @@ export function generateSchemaHtml(input: SchemaHtmlInput): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Schema Overview — ${dbName}</title>
-
-  <!-- vis-network: ER図描画 -->
-  <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+  <title>Schema Overview — ${safeDbName}</title>
+  <script src="./assets/vis-network.min.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -277,7 +286,7 @@ export function generateSchemaHtml(input: SchemaHtmlInput): string {
 
 <!-- ヘッダー -->
 <header>
-  <h1>🗺 Schema Overview — ${dbName}</h1>
+  <h1>🗺 Schema Overview — ${safeDbName}</h1>
 
   <div class="stats">
     <div class="stat-badge">📋 テーブル <strong>${tableCount}</strong></div>
@@ -307,7 +316,7 @@ export function generateSchemaHtml(input: SchemaHtmlInput): string {
 
   <div class="spacer"></div>
 
-  <span style="font-size:11px; color:#4a5568;">Generated: ${generatedAt}</span>
+  <span style="font-size:11px; color:#4a5568;">Generated: ${safeGeneratedAt}</span>
   <a href="report.html" style="text-decoration:none; margin-left:8px;">
     <button class="btn btn-primary">🗂 キャンバスビュー</button>
   </a>
@@ -325,7 +334,7 @@ export function generateSchemaHtml(input: SchemaHtmlInput): string {
   ${tables
     .map(
       (t) =>
-        `<div class="sidebar-item" onclick="focusTable('${t.name}')">${t.name}</div>`
+        `<div class="sidebar-item" onclick='focusTable(${JSON.stringify(t.id)})'>${escapeHtml(t.displayName)}</div>`
     )
     .join("\n  ")}
 </div>
